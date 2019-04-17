@@ -104,13 +104,48 @@
 
 #define USART_TX_MAX_LENGTH     0xff
 
+#define config_text_group_height  95
+#define source_font_height        15
+#define calibri_height            40
+#define config_spacing            15
+
 struct ili9488_opt_t g_ili9488_display_opt;
 const uint32_t BUTTON_W = 120;
 const uint32_t BUTTON_H = 150;
 const uint32_t BUTTON_BORDER = 2;
 const uint32_t BUTTON_X = ILI9488_LCD_WIDTH/2;
 const uint32_t BUTTON_Y = ILI9488_LCD_HEIGHT/2;
-struct t_ciclo *p_current;
+volatile int f_modo = 0;
+volatile int f_lock = 0;
+volatile int f_config = 0;
+volatile int f_start = 0;
+volatile int f_draw_config = 0;
+volatile int f_draw_start = 0;
+volatile int f_draw_menu = 0;
+
+volatile int f_pressing_lock = 0;
+volatile int lock_counter = 0;
+
+volatile int hours_passed = 0;
+volatile int minutes_passed = 0;
+volatile int seconds_passed = 0;
+volatile int tempo_sec = 0;
+
+const char *enxague_tempos[] = {"0", "15", "30", "45", "60"};
+const char *enxague_vezes[] = {"0", "1", "2", "3"};
+const char *centrifuga_tempos[] = {"0", "5", "10", "15", "20"};
+const char *centrifuga_RPM[] = {"600", "800", "900", "1200"};
+const int enxague_tempos_int[] = {0, 15, 30, 45, 60};
+const int enxague_vezes_int[] = {0, 1, 2, 3};
+const int centrifuga_tempos_int[] = {0, 5, 10, 15, 20};
+const int centrifuga_RPM_int[] = {600, 800, 900, 1200};
+
+volatile int enx_t_i = 0;
+volatile int enx_v_i = 0;
+volatile int cen_t_i = 0;
+volatile int cen_r_i = 0;
+volatile int pesado = 0;
+volatile int bolhas = 0;
 
 /**
  * Inicializa ordem do menu
@@ -118,7 +153,7 @@ struct t_ciclo *p_current;
  * deve ser exibido.
  */
 t_ciclo *initMenuOrder(){
-  c_rapido.previous = &c_enxague;
+  c_rapido.previous = &c_config;
   c_rapido.next = &c_diario;
 
   c_diario.previous = &c_rapido;
@@ -131,7 +166,10 @@ t_ciclo *initMenuOrder(){
   c_enxague.next = &c_centrifuga;
 
   c_centrifuga.previous = &c_enxague;
-  c_centrifuga.next = &c_rapido;
+  c_centrifuga.next = &c_config;
+  
+  c_config.previous = &c_centrifuga;
+  c_config.next = &c_rapido;
 
   return(&c_diario);
 }
@@ -275,10 +313,6 @@ void draw_button(uint32_t clicked) {
 	last_state = clicked;
 }
 
-void mudar_modo() {
-	*p_current = p_current->next;
-}
-
 uint32_t convert_axis_system_x(uint32_t touch_y) {
 	// entrada: 4096 - 0 (sistema de coordenadas atual)
 	// saida: 0 - 320
@@ -291,14 +325,187 @@ uint32_t convert_axis_system_y(uint32_t touch_x) {
 	return ILI9488_LCD_HEIGHT*touch_x/4096;
 }
 
-void update_screen(uint32_t tx, uint32_t ty) {
-	if(tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80) {
-		if(ty >= 198+50 && ty <= 198+50+80) {
-			//draw_button(1);
-		} else if(ty > 328+10 && ty < 328+10+60) {
-			mudar_modo();
-		} else if(ty > 398+10 && ty < 398+10+60) {
-			//draw_button(0);
+int get_next_from_list(int list_of_ints[], int current_index) {
+	
+	int size = sizeof(list_of_ints);
+	
+	if (current_index + 1 < size) {
+		return current_index + 1;
+	} else {
+		return 0;
+	}
+}
+
+char *bool_to_string(int booly) {
+	if (booly) return "Sim";
+	else return "Nao";
+}
+
+void fill_config_struct() {
+	c_config.bubblesOn = bolhas;
+	c_config.centrifugacaoRPM = centrifuga_RPM_int[cen_r_i];
+	c_config.centrifugacaoTempo = centrifuga_tempos_int[cen_t_i];
+	c_config.enxagueQnt = enxague_vezes_int[enx_v_i];
+	c_config.enxagueTempo = enxague_tempos_int[enx_t_i];
+	c_config.heavy = pesado;
+}
+
+void TC1_Handler(void){
+	volatile uint32_t ul_dummy;
+	
+	ul_dummy = tc_get_status(TC0, 1);
+
+	/* Avoid compiler warning */
+	UNUSED(ul_dummy);
+
+	lock_counter += 1;
+	
+	if (lock_counter == 3) {
+		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
+		ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+	}
+}
+
+void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
+	uint32_t ul_div;
+	uint32_t ul_tcclks;
+	uint32_t ul_sysclk = sysclk_get_cpu_hz();
+
+	uint32_t channel = 1;
+
+	/* Configura o PMC */
+	/* O TimerCounter ? meio confuso
+	o uC possui 3 TCs, cada TC possui 3 canais
+	TC0 : ID_TC0, ID_TC1, ID_TC2
+	TC1 : ID_TC3, ID_TC4, ID_TC5
+	TC2 : ID_TC6, ID_TC7, ID_TC8
+	*/
+	pmc_enable_periph_clk(ID_TC);
+
+	/** Configura o TC para operar em  4Mhz e interrup?c?o no RC compare */
+	tc_find_mck_divisor(freq, ul_sysclk, &ul_div, &ul_tcclks, ul_sysclk);
+	tc_init(TC, TC_CHANNEL, ul_tcclks | TC_CMR_CPCTRG);
+	tc_write_rc(TC, TC_CHANNEL, (ul_sysclk / ul_div) / freq);
+
+	/* Configura e ativa interrup?c?o no TC canal 0 */
+	/* Interrup??o no C */
+	NVIC_EnableIRQ((IRQn_Type) ID_TC);
+	tc_enable_interrupt(TC, TC_CHANNEL, TC_IER_CPCS);
+
+	/* Inicializa o canal 0 do TC */
+	tc_start(TC, TC_CHANNEL);
+}
+
+void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
+	
+	if (tx >= 10 && tx <= 70 && f_lock) {
+		if (ty >= 398+10 && ty <= 398+10+60) {
+			if (status == 192) {
+				f_pressing_lock = 1;
+				TC_init(TC0, ID_TC1, 1, 1);
+				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
+				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			} else {
+				if (f_pressing_lock && lock_counter > 2) {
+					tc_stop(TC0, 1);
+					f_lock = 0;
+					f_pressing_lock = 0;
+					lock_counter = 0;
+					ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+					ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+				}
+			}
+		}
+	}
+	
+	if (!f_lock && status == 192) {
+		if (tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80 && !f_start && !f_config) {
+			if (ty >= 198+50 && ty <= 198+50+80) {
+				f_draw_start = 1;
+				f_start = 1;
+			} else if (ty > 328+10 && ty < 328+10+60) {
+				f_modo = 1;
+			} else if (ty > 398+10 && ty < 398+10+60) {
+				f_draw_config = 1;
+				f_config = 1;
+			}
+		}
+		
+		else if (tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80 && f_start) {
+			if (ty > 328+10 && ty < 328+10+60) {
+				f_draw_menu = 1;
+				f_start = 0;
+			}
+		}
+		
+		else if (f_config) {
+			if (tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80) {
+				if (ty > 398+10 && ty < 398+10+60) {
+					f_draw_menu = 1;
+					f_config = 0;
+					
+					fill_config_struct();
+				}
+			}
+			
+			else if (tx >= ILI9488_LCD_WIDTH-70 && tx <= ILI9488_LCD_WIDTH-10) {
+				
+				int y_base = 30+calibri_height+config_spacing+source_font_height;
+				
+				if (ty >= 398+10 && ty <= 398+10+60) {
+					f_draw_config = 1;
+				} 
+				
+				else if (ty >= y_base && ty <= y_base+36) {
+					enx_t_i = get_next_from_list(enxague_tempos_int, enx_t_i);
+					f_draw_config = 1;
+				}
+				else if (ty >= y_base+calibri_height && ty <= y_base+calibri_height+36) {
+					enx_v_i = get_next_from_list(enxague_vezes_int, enx_v_i);
+					f_draw_config = 1;
+				}
+				
+				else if (ty >= y_base+(config_text_group_height+config_spacing) && ty <= y_base+(config_text_group_height+config_spacing)+36) {
+					cen_r_i = get_next_from_list(centrifuga_RPM_int, cen_r_i);
+					f_draw_config = 1;
+				}
+				else if (ty >= y_base+calibri_height+(config_text_group_height+config_spacing) && ty <= y_base+calibri_height+(config_text_group_height+config_spacing)+36) {
+					cen_t_i = get_next_from_list(centrifuga_tempos_int, cen_t_i);
+					f_draw_config = 1;
+				}
+				
+				else if (ty >= y_base+2*(config_text_group_height+config_spacing) && ty <= y_base+2*(config_text_group_height+config_spacing)+36) {
+					pesado = !pesado;
+					f_draw_config = 1;
+				}
+				else if (ty >= y_base+calibri_height+2*(config_text_group_height+config_spacing) && ty <= y_base+calibri_height+2*(config_text_group_height+config_spacing)+36) {
+					bolhas = !bolhas;
+					f_draw_config = 1;
+				}
+				
+			}
+		}
+		
+		if (tx >= 10 && tx <= 70) {
+			if (ty >= 398+10 && ty <= 398+10+60) {
+				f_lock = 1;
+				
+				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));\
+				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			}
+		}
+		
+	}
+	
+	if (status == 32) {
+		if (f_lock) {
+			if (f_pressing_lock) {
+				tc_stop(TC0, 1);
+				f_pressing_lock = 0;
+				lock_counter = 0;
+				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			}
 		}
 	}
 }
@@ -332,12 +539,15 @@ void mxt_handler(struct mxt_device *device)
 				touch_event.id, touch_event.x, touch_event.y,
 				touch_event.status, conv_x, conv_y);
 				
-		if (touch_event.status < 33) {
-			update_screen(conv_x, conv_y);
+		/*printf("%s: %d", "Stuff", touch_event.status);*/
+		if (touch_event.status == 32) {
+			update_screen(conv_x, conv_y, 32);
+		} else if (touch_event.status == 192) {
+			update_screen(conv_x, conv_y, 192);
 		}
 
 		/* Add the new string to the string buffer */
-		strcat(tx_buf, buf);
+		/*strcat(tx_buf, buf);*/
 		i++;
 
 		/* Check if there is still messages in the queue and
@@ -350,13 +560,91 @@ void mxt_handler(struct mxt_device *device)
 	}
 }
 
+void RTC_init(){
+	/* Configura o PMC */
+	pmc_enable_periph_clk(ID_RTC);
 
+	/* Default RTC configuration, 24-hour mode */
+	rtc_set_hour_mode(RTC, 0);
+
+	/* Configura data e hora manualmente */
+	rtc_set_date(RTC, 0, 0, 0, 0);
+	rtc_set_time(RTC, 0, 0, 0);
+
+	/* Configure RTC interrupts */
+	NVIC_DisableIRQ(RTC_IRQn);
+	NVIC_ClearPendingIRQ(RTC_IRQn);
+	NVIC_SetPriority(RTC_IRQn, 0);
+	NVIC_EnableIRQ(RTC_IRQn);
+
+	/* Ativa interrupcao via alarme */
+	rtc_enable_interrupt(RTC, RTC_IER_ALREN);
+
+}
+
+void RTC_Handler(void)
+{
+	uint32_t ul_status = rtc_get_status(RTC);
+
+	/*
+	*  Verifica por qual motivo entrou
+	*  na interrupcao, se foi por segundo
+	*  ou Alarm
+	*/
+	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
+		rtc_clear_status(RTC, RTC_SCCR_SECCLR);
+	}
+	
+	/* Time or date alarm */
+	if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
+		rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
+		if (f_start) {
+			rtc_set_date_alarm(RTC, 1, 0, 1, 0);
+			int hora, min, sec;
+			rtc_get_time(RTC, &hora, &min, &sec);
+			if (sec >= 59) {
+				if (min >= 59) {
+					rtc_set_time_alarm(RTC, 1, 0, hora+1, 0, 1, 0);
+					hours_passed += 1;
+					minutes_passed = 0;
+					} else {
+					rtc_set_time_alarm(RTC, 1, hora, 1, min+1, 1, 0);
+					minutes_passed += 1;
+				}
+				seconds_passed = 0;
+				} else {
+				rtc_set_time_alarm(RTC, 1, hora, 1, min, 1, sec+1);
+				seconds_passed += 1;
+			}
+			
+			if (tempo_sec - seconds_passed >= 0) {
+				char string2[32];
+				tempo_sec -= 1;
+				sprintf(string2, "%02d:%02d:%02d", tempo_sec/3600, tempo_sec%3600/60, tempo_sec%3600%60);
+				font_draw_text(&calibri_36, string2, 20, 128+60+40, 1);
+			} else {
+				f_draw_menu = 1;
+				f_start = 0;
+				
+				seconds_passed = 0;
+			}
+			
+		}
+		
+	}
+	
+	rtc_clear_status(RTC, RTC_SCCR_ACKCLR);
+	rtc_clear_status(RTC, RTC_SCCR_TIMCLR);
+	rtc_clear_status(RTC, RTC_SCCR_CALCLR);
+	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
+	
+}
 
 
 int main(void)
 {
 	
-	*p_current = initMenuOrder();
+	t_ciclo *p_current = initMenuOrder();
 	// printf("%s", p_primeiro->next->next->nome);
 	
 	struct mxt_device device; /* Device data container */
@@ -380,13 +668,18 @@ int main(void)
 	/* Initialize stdio on USART */
 	stdio_serial_init(USART_SERIAL_EXAMPLE, &usart_serial_options);
 	
+	RTC_init();
+	
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 20, ILI9488_LCD_WIDTH/2+64, 128+20);
 	
-	char buffer[32];
-	sprintf(buffer, "Modo: %s", p_current->nome);
-	font_draw_text(&calibri_36, buffer, 20, 128+30, 1);
-	font_draw_text(&calibri_36, "1 horas e 30 mins", 20, 128+30+40, 1);
+	char string1[32];
+	char string2[32];
+	sprintf(string1, "Modo: %s", p_current->nome);
+	font_draw_text(&calibri_36, string1, 20, 128+30, 1);
+	int tempo_min = p_current->enxagueTempo * p_current->enxagueQnt + p_current->centrifugacaoTempo;
+	sprintf(string2, "%d horas e %02d mins", tempo_min/60, tempo_min%60);
+	font_draw_text(&calibri_36, string2, 20, 128+30+40, 1);
 	
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
 	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 198+50, ILI9488_LCD_WIDTH/2+80, 198+50+80);
@@ -397,13 +690,153 @@ int main(void)
 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
 	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 	ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 	
 	while(1) {
 		if (mxt_is_message_pending(&device)) {
 			mxt_handler(&device);
 		}
+		
+		if (f_modo) {
+			p_current = p_current->next;
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_WHITE));
+			ili9488_draw_filled_rectangle(0, 128+30, ILI9488_LCD_WIDTH, 128+30+40+38);
+			
+			sprintf(string1, "Modo: %s", p_current->nome);
+			font_draw_text(&calibri_36, string1, 20, 128+30, 1);
+			int tempo_min = p_current->enxagueTempo * p_current->enxagueQnt + p_current->centrifugacaoTempo;
+			sprintf(string2, "%d horas e %02d mins", tempo_min/60, tempo_min%60);
+			font_draw_text(&calibri_36, string2, 20, 128+30+40, 1);
+			
+			f_modo = 0;
+		}
+		
+		if (f_draw_config) {
+			
+			draw_screen();
+			
+			font_draw_text(&calibri_36, "Configuracao", 20, 30, 1);
+			
+			int group_index = 0;
+			
+			font_draw_text(&sourcecodepro_28, "ENXAGUE", 20, 30+calibri_height+config_spacing+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, "Tempo:", 20, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, "Vezes:", 20, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, enxague_tempos[enx_t_i], ILI9488_LCD_WIDTH/2, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, enxague_vezes[enx_v_i], ILI9488_LCD_WIDTH/2, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
+				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
+				ILI9488_LCD_WIDTH-10,
+				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
+				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
+				ILI9488_LCD_WIDTH-10,
+				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);	
+			
+			group_index = 1;
+			font_draw_text(&sourcecodepro_28, "CENTRIFUGA", 20, 30+calibri_height+config_spacing+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, "RPM:", 20, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, "Tempo:", 20, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, centrifuga_RPM[cen_r_i], ILI9488_LCD_WIDTH/2, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, centrifuga_tempos[cen_t_i], ILI9488_LCD_WIDTH/2, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
+				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
+				ILI9488_LCD_WIDTH-10,
+				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
+				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
+				ILI9488_LCD_WIDTH-10,
+				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			
+			group_index = 2;
+			font_draw_text(&sourcecodepro_28, "ADICIONAIS", 20, 30+calibri_height+config_spacing+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, "Pesado:", 20, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, "Bolhas:", 20, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, bool_to_string(pesado), ILI9488_LCD_WIDTH/2, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			font_draw_text(&calibri_36, bool_to_string(bolhas), ILI9488_LCD_WIDTH/2, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
+				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
+				ILI9488_LCD_WIDTH-10,
+				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
+				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
+				ILI9488_LCD_WIDTH-10,
+				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70, 398+10, ILI9488_LCD_WIDTH-10, 398+10+60);
+			
+			f_draw_config = 0;
+		}
+		
+		if (f_draw_start) {
+			
+			draw_screen();
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 50, ILI9488_LCD_WIDTH/2+64, 128+50);
+			
+			sprintf(string1, "%s", p_current->nome);
+			font_draw_text(&calibri_36, string1, 20, 128+60, 1);
+			tempo_sec = (p_current->enxagueTempo * p_current->enxagueQnt + p_current->centrifugacaoTempo) * 60;
+			sprintf(string2, "%02d:%02d:%02d", tempo_sec/3600, tempo_sec%3600/60, tempo_sec%3600%60);
+			font_draw_text(&calibri_36, string2, 20, 128+60+40, 1);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_RED));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			
+			rtc_set_date(RTC, 0, 0, 0, 0);
+			rtc_set_time(RTC, 0, 0, 0);
+			
+			rtc_set_date_alarm(RTC, 0, 0, 0, 0);
+			rtc_set_time_alarm(RTC, 0, 0, 0, 0, 1, 1);
+			
+			f_draw_start = 0;
+		}
+		
+		if (f_draw_menu) {
+			
+			draw_screen();
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 20, ILI9488_LCD_WIDTH/2+64, 128+20);
+			
+			sprintf(string1, "Modo: %s", p_current->nome);
+			font_draw_text(&calibri_36, string1, 20, 128+30, 1);
+			int tempo_min = p_current->enxagueTempo * p_current->enxagueQnt + p_current->centrifugacaoTempo;
+			sprintf(string2, "%d horas e %02d mins", tempo_min/60, tempo_min%60);
+			font_draw_text(&calibri_36, string2, 20, 128+30+40, 1);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 198+50, ILI9488_LCD_WIDTH/2+80, 198+50+80);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			
+			f_draw_menu = 0;
+		}
+
 	}
 
 	return 0;
