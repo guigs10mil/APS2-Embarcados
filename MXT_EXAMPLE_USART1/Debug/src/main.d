@@ -185,7 +185,8 @@ src/main.d src/main.o: ../src/main.c ../src/asf.h \
  ../src/config/conf_board.h ../src/config/conf_example.h ../src/tfont.h \
  ../src/sourcecodepro_28.h ../src/calibri_36.h ../src/arial_72.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\math.h \
- ../src/maquina1.h
+ ../src/Icons/WashH/time.h ../src/Icons/WashH/vortex.h \
+ ../src/Icons/WashH/water.h ../src/Icons/WashH/zanvil.h ../src/maquina1.h
 
 ../src/asf.h:
 
@@ -586,5 +587,13 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 ../src/arial_72.h:
 
 c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\math.h:
+
+../src/Icons/WashH/time.h:
+
+../src/Icons/WashH/vortex.h:
+
+../src/Icons/WashH/water.h:
+
+../src/Icons/WashH/zanvil.h:
 
 ../src/maquina1.h:

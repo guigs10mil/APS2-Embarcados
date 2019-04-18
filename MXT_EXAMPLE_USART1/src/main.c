@@ -96,8 +96,13 @@
 #include "calibri_36.h"
 #include "arial_72.h"
 #include "math.h"
-#include "maquina1.h"
 
+#include "Icons/WashH/time.h"
+#include "Icons/WashH/vortex.h"
+#include "Icons/WashH/water.h"
+#include "Icons/WashH/zanvil.h"
+
+#include "maquina1.h"
 
 #define MAX_ENTRIES        3
 #define STRING_LENGTH     70
@@ -108,6 +113,16 @@
 #define source_font_height        15
 #define calibri_height            40
 #define config_spacing            15
+
+#define LED_PIO           PIOC
+#define LED_PIO_ID        12
+#define LED_PIO_IDX       8u
+#define LED_PIO_IDX_MASK  (1u << LED_PIO_IDX)
+
+#define BUT_PIO           PIOA
+#define BUT_PIO_ID        10
+#define BUT_PIO_IDX       11u
+#define BUT_PIO_IDX_MASK  (1u << BUT_PIO_IDX)
 
 struct ili9488_opt_t g_ili9488_display_opt;
 const uint32_t BUTTON_W = 120;
@@ -125,6 +140,7 @@ volatile int f_draw_menu = 0;
 
 volatile int f_pressing_lock = 0;
 volatile int lock_counter = 0;
+volatile int f_door_is_open = 0;
 
 volatile int hours_passed = 0;
 volatile int minutes_passed = 0;
@@ -146,6 +162,7 @@ volatile int cen_t_i = 0;
 volatile int cen_r_i = 0;
 volatile int pesado = 0;
 volatile int bolhas = 0;
+
 
 /**
  * Inicializa ordem do menu
@@ -341,6 +358,25 @@ char *bool_to_string(int booly) {
 	else return "Nao";
 }
 
+void open_door(void) {
+	pio_clear(LED_PIO, LED_PIO_IDX_MASK); // acende
+	f_door_is_open = 1;
+}
+
+void close_door(void) {
+	pio_set(LED_PIO, LED_PIO_IDX_MASK); // apaga
+	f_door_is_open = 0;
+}
+
+void but_callback(void)
+{
+	if (f_door_is_open) {
+		close_door();
+	} else if (!f_start){
+		open_door();
+	}
+}
+
 void fill_config_struct() {
 	c_config.bubblesOn = bolhas;
 	c_config.centrifugacaoRPM = centrifuga_RPM_int[cen_r_i];
@@ -422,7 +458,6 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 		if (tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80 && !f_start && !f_config) {
 			if (ty >= 198+50 && ty <= 198+50+80) {
 				f_draw_start = 1;
-				f_start = 1;
 			} else if (ty > 328+10 && ty < 328+10+60) {
 				f_modo = 1;
 			} else if (ty > 398+10 && ty < 398+10+60) {
@@ -452,11 +487,7 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 				
 				int y_base = 30+calibri_height+config_spacing+source_font_height;
 				
-				if (ty >= 398+10 && ty <= 398+10+60) {
-					f_draw_config = 1;
-				} 
-				
-				else if (ty >= y_base && ty <= y_base+36) {
+				if (ty >= y_base && ty <= y_base+36) {
 					enx_t_i = get_next_from_list(enxague_tempos_int, enx_t_i);
 					f_draw_config = 1;
 				}
@@ -490,7 +521,7 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 			if (ty >= 398+10 && ty <= 398+10+60) {
 				f_lock = 1;
 				
-				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));\
+				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 			}
 		}
@@ -640,6 +671,37 @@ void RTC_Handler(void)
 	
 }
 
+void io_init(void)
+{
+
+	// Configura led
+	pmc_enable_periph_clk(LED_PIO_ID);
+	pio_configure(LED_PIO, PIO_OUTPUT_0, LED_PIO_IDX_MASK, PIO_DEFAULT);
+
+	// Inicializa clock do periférico PIO responsavel pelo botao
+	pmc_enable_periph_clk(BUT_PIO_ID);
+
+	// Configura PIO para lidar com o pino do botão como entrada
+	// com pull-up
+	pio_configure(BUT_PIO, PIO_INPUT, BUT_PIO_IDX_MASK, PIO_PULLUP | PIO_DEBOUNCE);
+
+	// Configura interrupção no pino referente ao botao e associa
+	// função de callback caso uma interrupção for gerada
+	// a função de callback é a: but_callback()
+	pio_handler_set(BUT_PIO,
+	BUT_PIO_ID,
+	BUT_PIO_IDX_MASK,
+	PIO_IT_RISE_EDGE,
+	but_callback);
+
+	// Ativa interrupção
+	pio_enable_interrupt(BUT_PIO, BUT_PIO_IDX_MASK);
+
+	// Configura NVIC para receber interrupcoes do PIO do botao
+	// com prioridade 4 (quanto mais próximo de 0 maior)
+	NVIC_EnableIRQ(BUT_PIO_ID);
+	NVIC_SetPriority(BUT_PIO_ID, 4);
+}
 
 int main(void)
 {
@@ -659,6 +721,9 @@ int main(void)
 
 	sysclk_init(); /* Initialize system clocks */
 	board_init();  /* Initialize board */
+	
+	io_init();
+	
 	configure_lcd();
 	draw_screen();
 	
@@ -670,8 +735,12 @@ int main(void)
 	
 	RTC_init();
 	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 20, ILI9488_LCD_WIDTH/2+64, 128+20);
+// 	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+// 	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 20, ILI9488_LCD_WIDTH/2+64, 128+20);
+
+	close_door();
+	
+	ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-64, 20, 128, 128, p_current->icon->data);
 	
 	char string1[32];
 	char string2[32];
@@ -700,6 +769,8 @@ int main(void)
 		
 		if (f_modo) {
 			p_current = p_current->next;
+			
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-64, 20, 128, 128, p_current->icon->data);
 			
 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_WHITE));
 			ili9488_draw_filled_rectangle(0, 128+30, ILI9488_LCD_WIDTH, 128+30+40+38);
@@ -775,13 +846,10 @@ int main(void)
 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70, 398+10, ILI9488_LCD_WIDTH-10, 398+10+60);
-			
 			f_draw_config = 0;
 		}
 		
-		if (f_draw_start) {
+		if (f_draw_start && !f_door_is_open) {
 			
 			draw_screen();
 			
@@ -806,6 +874,8 @@ int main(void)
 			rtc_set_date_alarm(RTC, 0, 0, 0, 0);
 			rtc_set_time_alarm(RTC, 0, 0, 0, 0, 1, 1);
 			
+			f_start = 1;
+			
 			f_draw_start = 0;
 		}
 		
@@ -813,8 +883,7 @@ int main(void)
 			
 			draw_screen();
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 20, ILI9488_LCD_WIDTH/2+64, 128+20);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-64, 20, 128, 128, p_current->icon->data);
 			
 			sprintf(string1, "Modo: %s", p_current->nome);
 			font_draw_text(&calibri_36, string1, 20, 128+30, 1);

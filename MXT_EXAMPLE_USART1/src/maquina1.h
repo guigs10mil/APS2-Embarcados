@@ -21,6 +21,7 @@ struct ciclo{
 	char bubblesOn;          // smart bubbles on (???)
 	t_ciclo *previous;
 	t_ciclo *next;
+	tImage *icon;
 };
 
 t_ciclo c_rapido = {.nome = "Rapido",
@@ -29,7 +30,8 @@ t_ciclo c_rapido = {.nome = "Rapido",
 	.centrifugacaoRPM = 900,
 	.centrifugacaoTempo = 5,
 	.heavy = 0,
-	.bubblesOn = 1
+	.bubblesOn = 1,
+	.icon = &time
 };
 
 t_ciclo c_diario = {.nome = "Diario",
@@ -39,6 +41,7 @@ t_ciclo c_diario = {.nome = "Diario",
 	.centrifugacaoTempo = 8,
 	.heavy = 0,
 	.bubblesOn = 1,
+	.icon = &time
 };
 
 t_ciclo c_pesado = {.nome = "Pesado",
@@ -48,6 +51,7 @@ t_ciclo c_pesado = {.nome = "Pesado",
 	.centrifugacaoTempo = 10,
 	.heavy = 1,
 	.bubblesOn = 1,
+	.icon = &zanvil
 };
 
 t_ciclo c_enxague = {.nome = "Enxague",
@@ -57,6 +61,7 @@ t_ciclo c_enxague = {.nome = "Enxague",
 	.centrifugacaoTempo = 0,
 	.heavy = 0,
 	.bubblesOn = 0,
+	.icon = &water
 };
 
 t_ciclo c_centrifuga = {.nome = "Centrifuga",
@@ -66,6 +71,7 @@ t_ciclo c_centrifuga = {.nome = "Centrifuga",
 	.centrifugacaoTempo = 10,
 	.heavy = 0,
 	.bubblesOn = 0,
+	.icon = &vortex
 };
 
 t_ciclo c_config = {.nome = "Config",
@@ -75,6 +81,7 @@ t_ciclo c_config = {.nome = "Config",
 	.centrifugacaoTempo = 0,
 	.heavy = 0,
 	.bubblesOn = 0,
+	.icon = &time
 };
 
 
