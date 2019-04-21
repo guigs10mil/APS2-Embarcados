@@ -41,7 +41,7 @@ t_ciclo c_diario = {.nome = "Diario",
 	.centrifugacaoTempo = 8,
 	.heavy = 0,
 	.bubblesOn = 1,
-	.icon = &time
+	.icon = &day
 };
 
 t_ciclo c_pesado = {.nome = "Pesado",
@@ -81,7 +81,7 @@ t_ciclo c_config = {.nome = "Config",
 	.centrifugacaoTempo = 0,
 	.heavy = 0,
 	.bubblesOn = 0,
-	.icon = &time
+	.icon = &gear
 };
 
 

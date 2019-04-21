@@ -186,7 +186,20 @@ src/main.d src/main.o: ../src/main.c ../src/asf.h \
  ../src/sourcecodepro_28.h ../src/calibri_36.h ../src/arial_72.h \
  c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-none-eabi\include\math.h \
  ../src/Icons/WashH/time.h ../src/Icons/WashH/vortex.h \
- ../src/Icons/WashH/water.h ../src/Icons/WashH/zanvil.h ../src/maquina1.h
+ ../src/Icons/WashH/water.h ../src/Icons/WashH/zanvil.h \
+ ../src/Icons/WashH/gear.h ../src/Icons/WashH/day.h \
+ ../src/Icons/WashH/rep.h ../src/Icons/WashH/lockedGray.h \
+ ../src/Icons/WashH/LockedGreen.h ../src/Icons/WashH/lockedRed.h \
+ ../src/Icons/WashH/unlocked.h ../src/Icons/buttonH/lavar.h \
+ ../src/Icons/buttonH/modo.h ../src/Icons/buttonH/configurar.h \
+ ../src/Icons/buttonH/voltar.h ../src/Icons/buttonH/cancelar.h \
+ ../src/Anima/D0.h ../src/Anima/D1.h ../src/Anima/D2.h ../src/Anima/D3.h \
+ ../src/Anima/D4.h ../src/Anima/D5.h ../src/Anima/D6.h ../src/Anima/D7.h \
+ ../src/Anima/D8.h ../src/Anima/D9.h ../src/Anima/D10.h \
+ ../src/Anima/D11.h ../src/Anima/D12.h ../src/Anima/D13.h \
+ ../src/Anima/D14.h ../src/Anima/D15.h ../src/Anima/D16.h \
+ ../src/Anima/D17.h ../src/Anima/D18.h ../src/Anima/D19.h \
+ ../src/maquina1.h
 
 ../src/asf.h:
 
@@ -595,5 +608,69 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 ../src/Icons/WashH/water.h:
 
 ../src/Icons/WashH/zanvil.h:
+
+../src/Icons/WashH/gear.h:
+
+../src/Icons/WashH/day.h:
+
+../src/Icons/WashH/rep.h:
+
+../src/Icons/WashH/lockedGray.h:
+
+../src/Icons/WashH/LockedGreen.h:
+
+../src/Icons/WashH/lockedRed.h:
+
+../src/Icons/WashH/unlocked.h:
+
+../src/Icons/buttonH/lavar.h:
+
+../src/Icons/buttonH/modo.h:
+
+../src/Icons/buttonH/configurar.h:
+
+../src/Icons/buttonH/voltar.h:
+
+../src/Icons/buttonH/cancelar.h:
+
+../src/Anima/D0.h:
+
+../src/Anima/D1.h:
+
+../src/Anima/D2.h:
+
+../src/Anima/D3.h:
+
+../src/Anima/D4.h:
+
+../src/Anima/D5.h:
+
+../src/Anima/D6.h:
+
+../src/Anima/D7.h:
+
+../src/Anima/D8.h:
+
+../src/Anima/D9.h:
+
+../src/Anima/D10.h:
+
+../src/Anima/D11.h:
+
+../src/Anima/D12.h:
+
+../src/Anima/D13.h:
+
+../src/Anima/D14.h:
+
+../src/Anima/D15.h:
+
+../src/Anima/D16.h:
+
+../src/Anima/D17.h:
+
+../src/Anima/D18.h:
+
+../src/Anima/D19.h:
 
 ../src/maquina1.h:

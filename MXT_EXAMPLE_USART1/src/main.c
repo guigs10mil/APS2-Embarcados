@@ -101,8 +101,51 @@
 #include "Icons/WashH/vortex.h"
 #include "Icons/WashH/water.h"
 #include "Icons/WashH/zanvil.h"
+#include "Icons/WashH/gear.h"
+#include "Icons/WashH/day.h"
+#include "Icons/WashH/rep.h"
+
+#include "Icons/WashH/lockedGray.h"
+#include "Icons/WashH/LockedGreen.h"
+#include "Icons/WashH/lockedRed.h"
+#include "Icons/WashH/unlocked.h"
+
+
+
+#include "Icons/buttonH/lavar.h"
+#include "Icons/buttonH/modo.h"
+#include "Icons/buttonH/configurar.h"
+#include "Icons/buttonH/voltar.h"
+#include "Icons/buttonH/cancelar.h"
+
+
+
+#include "Anima/D0.h"
+#include "Anima/D1.h"
+#include "Anima/D2.h"
+#include "Anima/D3.h"
+#include "Anima/D4.h"
+#include "Anima/D5.h"
+#include "Anima/D6.h"
+#include "Anima/D7.h"
+#include "Anima/D8.h"
+#include "Anima/D9.h"
+#include "Anima/D10.h"
+#include "Anima/D11.h"
+#include "Anima/D12.h"
+#include "Anima/D13.h"
+#include "Anima/D14.h"
+#include "Anima/D15.h"
+#include "Anima/D16.h"
+#include "Anima/D17.h"
+#include "Anima/D18.h"
+#include "Anima/D19.h"
+
 
 #include "maquina1.h"
+
+const tImage* AnimaList[18]={&D0,&D1,&D2,&D3,&D4,&D5,&D6,&D7,&D8,&D9,&D10,&D11,&D12,&D13,&D14,&D15,&D16,&D17};
+
 
 #define MAX_ENTRIES        3
 #define STRING_LENGTH     70
@@ -399,8 +442,30 @@ void TC1_Handler(void){
 	if (lock_counter == 3) {
 		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
 		ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+		ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,LockedGreen.data);
 	}
 }
+
+
+volatile int counter=0;
+void TC0_Handler(void){
+	volatile uint32_t ul_dummy;
+	
+	ul_dummy = tc_get_status(TC0, 0);
+
+	/* Avoid compiler warning */
+	UNUSED(ul_dummy);
+	if (counter>17)
+	{
+		counter=0;
+	}
+
+	ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-63,20,AnimaList[counter]->width,AnimaList[counter]->height,AnimaList[counter]->data);
+	counter=counter +1;
+
+}
+
+
 
 void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
 	uint32_t ul_div;
@@ -441,14 +506,17 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 				TC_init(TC0, ID_TC1, 1, 1);
 				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
 				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+				ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,lockedRed.data);
 			} else {
 				if (f_pressing_lock && lock_counter > 2) {
 					tc_stop(TC0, 1);
+					counter=0;
 					f_lock = 0;
 					f_pressing_lock = 0;
 					lock_counter = 0;
 					ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 					ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+					ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
 				}
 			}
 		}
@@ -467,7 +535,7 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 		}
 		
 		else if (tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80 && f_start) {
-			if (ty > 328+10 && ty < 328+10+60) {
+			if (ty > 398+10 && ty < 398+10+60) {
 				f_draw_menu = 1;
 				f_start = 0;
 			}
@@ -521,8 +589,9 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 			if (ty >= 398+10 && ty <= 398+10+60) {
 				f_lock = 1;
 				
-				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+				//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+				//ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+				ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,lockedGray.data);
 			}
 		}
 		
@@ -536,6 +605,7 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 				lock_counter = 0;
 				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
 				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+				ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,lockedGray.data);
 			}
 		}
 	}
@@ -750,19 +820,24 @@ int main(void)
 	sprintf(string2, "%d horas e %02d mins", tempo_min/60, tempo_min%60);
 	font_draw_text(&calibri_36, string2, 20, 128+30+40, 1);
 	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
-	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 198+50, ILI9488_LCD_WIDTH/2+80, 198+50+80);
+	//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
+	//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 198+50, ILI9488_LCD_WIDTH/2+80, 198+50+80);
+	ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 198+50, lavar.width, lavar.height, lavar.data);
 	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+	//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+	//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+	ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 328+10, modo.width, modo.height, modo.data);
 	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-	ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+	//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+	//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+	ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 398+10, configurar.width, configurar.height, configurar.data);
 	
-	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-	ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+	//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+	//ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+	ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
 	
 	while(1) {
+		
 		if (mxt_is_message_pending(&device)) {
 			mxt_handler(&device);
 		}
@@ -798,14 +873,11 @@ int main(void)
 			font_draw_text(&calibri_36, enxague_tempos[enx_t_i], ILI9488_LCD_WIDTH/2, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
 			font_draw_text(&calibri_36, enxague_vezes[enx_v_i], ILI9488_LCD_WIDTH/2, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
-				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
-				ILI9488_LCD_WIDTH-10,
-				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
-				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
-				ILI9488_LCD_WIDTH-10,
-				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);	
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH-70,30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)
+			,rep.width,rep.height,rep.data);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH-70,30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)
+			,rep.width,rep.height,rep.data);
+			
 			
 			group_index = 1;
 			font_draw_text(&sourcecodepro_28, "CENTRIFUGA", 20, 30+calibri_height+config_spacing+group_index*(config_text_group_height+config_spacing), 1);
@@ -814,14 +886,12 @@ int main(void)
 			font_draw_text(&calibri_36, centrifuga_RPM[cen_r_i], ILI9488_LCD_WIDTH/2, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
 			font_draw_text(&calibri_36, centrifuga_tempos[cen_t_i], ILI9488_LCD_WIDTH/2, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
-				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
-				ILI9488_LCD_WIDTH-10,
-				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
-				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
-				ILI9488_LCD_WIDTH-10,
-				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH-70,30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)
+			,rep.width,rep.height,rep.data);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH-70,30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)
+			,rep.width,rep.height,rep.data);
+			
+			
 			
 			group_index = 2;
 			font_draw_text(&sourcecodepro_28, "ADICIONAIS", 20, 30+calibri_height+config_spacing+group_index*(config_text_group_height+config_spacing), 1);
@@ -829,22 +899,19 @@ int main(void)
 			font_draw_text(&calibri_36, "Bolhas:", 20, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
 			font_draw_text(&calibri_36, bool_to_string(pesado), ILI9488_LCD_WIDTH/2, 30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
 			font_draw_text(&calibri_36, bool_to_string(bolhas), ILI9488_LCD_WIDTH/2, 30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing), 1);
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
-				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
-				ILI9488_LCD_WIDTH-10,
-				30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH-70,
-				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing),
-				ILI9488_LCD_WIDTH-10,
-				30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)+36);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH-70,30+calibri_height+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)
+			,rep.width,rep.height,rep.data);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH-70,30+calibri_height*2+config_spacing+source_font_height+group_index*(config_text_group_height+config_spacing)
+			,rep.width,rep.height,rep.data);
 			
 			
 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 			ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 398+10,voltar.width,voltar.height,voltar.data);
 			
 			f_draw_config = 0;
 		}
@@ -853,26 +920,29 @@ int main(void)
 			
 			draw_screen();
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 50, ILI9488_LCD_WIDTH/2+64, 128+50);
-			
+// 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+// 			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-64, 50, ILI9488_LCD_WIDTH/2+64, 128+50);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-63,20,AnimaList[0]->width,AnimaList[0]->height,AnimaList[0]->data);
 			sprintf(string1, "%s", p_current->nome);
 			font_draw_text(&calibri_36, string1, 20, 128+60, 1);
 			tempo_sec = (p_current->enxagueTempo * p_current->enxagueQnt + p_current->centrifugacaoTempo) * 60;
 			sprintf(string2, "%02d:%02d:%02d", tempo_sec/3600, tempo_sec%3600/60, tempo_sec%3600%60);
 			font_draw_text(&calibri_36, string2, 20, 128+60+40, 1);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_RED));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_RED));
+			//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80,398+10,cancelar.width,cancelar.height,cancelar.data);
 			
 			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 			ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
 			
 			rtc_set_date(RTC, 0, 0, 0, 0);
 			rtc_set_time(RTC, 0, 0, 0);
 			
 			rtc_set_date_alarm(RTC, 0, 0, 0, 0);
 			rtc_set_time_alarm(RTC, 0, 0, 0, 0, 1, 1);
+			TC_init(TC0, ID_TC0, 0, 20);
 			
 			f_start = 1;
 			
@@ -881,6 +951,7 @@ int main(void)
 		
 		if (f_draw_menu) {
 			
+			tc_stop(TC0,0);
 			draw_screen();
 			
 			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-64, 20, 128, 128, p_current->icon->data);
@@ -891,17 +962,21 @@ int main(void)
 			sprintf(string2, "%d horas e %02d mins", tempo_min/60, tempo_min%60);
 			font_draw_text(&calibri_36, string2, 20, 128+30+40, 1);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 198+50, ILI9488_LCD_WIDTH/2+80, 198+50+80);
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
+			//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 198+50, ILI9488_LCD_WIDTH/2+80, 198+50+80);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 198+50, lavar.width, lavar.height, lavar.data);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 328+10, ILI9488_LCD_WIDTH/2+80, 328+10+60);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 328+10, modo.width, modo.height, modo.data);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			//ili9488_draw_filled_rectangle(ILI9488_LCD_WIDTH/2-80, 398+10, ILI9488_LCD_WIDTH/2+80, 398+10+60);
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-80, 398+10, configurar.width, configurar.height, configurar.data);
 			
-			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-			ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+			//ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+			ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
 			
 			f_draw_menu = 0;
 		}

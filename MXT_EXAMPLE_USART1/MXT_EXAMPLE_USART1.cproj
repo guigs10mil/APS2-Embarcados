@@ -698,8 +698,69 @@
     <Folder Include="src\ASF\thirdparty\CMSIS\Lib\" />
     <Folder Include="src\ASF\thirdparty\CMSIS\Lib\GCC\" />
     <Folder Include="src\config\" />
+    <Folder Include="src\Anima" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\Anima\D0.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D1.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D10.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D11.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D12.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D13.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D14.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D15.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D16.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D17.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D18.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D19.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D2.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D3.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D4.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D5.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D6.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D7.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D8.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\Anima\D9.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\arial_72.h">
       <SubType>compile</SubType>
     </Compile>
