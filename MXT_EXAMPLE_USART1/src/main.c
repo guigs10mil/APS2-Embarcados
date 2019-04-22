@@ -184,6 +184,7 @@ volatile int f_draw_menu = 0;
 volatile int f_pressing_lock = 0;
 volatile int lock_counter = 0;
 volatile int f_door_is_open = 0;
+volatile int f_draw_door_is_open = 0;
 
 volatile int hours_passed = 0;
 volatile int minutes_passed = 0;
@@ -205,6 +206,9 @@ volatile int cen_t_i = 0;
 volatile int cen_r_i = 0;
 volatile int pesado = 0;
 volatile int bolhas = 0;
+
+volatile int anim_counter = 0;
+volatile int f_draw_anim = 0;
 
 
 /**
@@ -437,17 +441,18 @@ void TC1_Handler(void){
 	/* Avoid compiler warning */
 	UNUSED(ul_dummy);
 
-	lock_counter += 1;
+	if (f_pressing_lock) {
+		lock_counter += 1;	
+	}
 	
 	if (lock_counter == 3) {
-		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
-		ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+// 		ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
+// 		ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 		ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,LockedGreen.data);
 	}
 }
 
 
-volatile int counter=0;
 void TC0_Handler(void){
 	volatile uint32_t ul_dummy;
 	
@@ -455,13 +460,12 @@ void TC0_Handler(void){
 
 	/* Avoid compiler warning */
 	UNUSED(ul_dummy);
-	if (counter>17)
+	if (anim_counter>17)
 	{
-		counter=0;
+		anim_counter = 0;
 	}
 
-	ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-63,20,AnimaList[counter]->width,AnimaList[counter]->height,AnimaList[counter]->data);
-	counter=counter +1;
+	f_draw_anim = 1;
 
 }
 
@@ -504,18 +508,18 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 			if (status == 192) {
 				f_pressing_lock = 1;
 				TC_init(TC0, ID_TC1, 1, 1);
-				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
-				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+// 				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_TOMATO));
+// 				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 				ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,lockedRed.data);
 			} else {
 				if (f_pressing_lock && lock_counter > 2) {
 					tc_stop(TC0, 1);
-					counter=0;
+					anim_counter = 0;
 					f_lock = 0;
 					f_pressing_lock = 0;
 					lock_counter = 0;
-					ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
-					ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+// 					ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
+// 					ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 					ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
 				}
 			}
@@ -526,6 +530,9 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 		if (tx >= ILI9488_LCD_WIDTH/2-80 && tx <= ILI9488_LCD_WIDTH/2+80 && !f_start && !f_config) {
 			if (ty >= 198+50 && ty <= 198+50+80) {
 				f_draw_start = 1;
+				if (f_door_is_open) {
+					f_draw_door_is_open = 1;
+				}
 			} else if (ty > 328+10 && ty < 328+10+60) {
 				f_modo = 1;
 			} else if (ty > 398+10 && ty < 398+10+60) {
@@ -600,12 +607,12 @@ void update_screen (uint32_t tx, uint32_t ty, uint32_t status) {
 	if (status == 32) {
 		if (f_lock) {
 			if (f_pressing_lock) {
-				tc_stop(TC0, 1);
 				f_pressing_lock = 0;
 				lock_counter = 0;
-				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
+// 				ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+// 				ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 				ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,lockedGray.data);
+				/*tc_stop(TC0, 1);*/
 			}
 		}
 	}
@@ -675,7 +682,7 @@ void RTC_init(){
 	/* Configure RTC interrupts */
 	NVIC_DisableIRQ(RTC_IRQn);
 	NVIC_ClearPendingIRQ(RTC_IRQn);
-	NVIC_SetPriority(RTC_IRQn, 0);
+	NVIC_SetPriority(RTC_IRQn, 5);
 	NVIC_EnableIRQ(RTC_IRQn);
 
 	/* Ativa interrupcao via alarme */
@@ -856,6 +863,10 @@ int main(void)
 			sprintf(string2, "%d horas e %02d mins", tempo_min/60, tempo_min%60);
 			font_draw_text(&calibri_36, string2, 20, 128+30+40, 1);
 			
+			if (f_door_is_open && f_draw_start) {
+				f_draw_door_is_open = 1;
+			}
+			
 			f_modo = 0;
 		}
 		
@@ -942,7 +953,7 @@ int main(void)
 			
 			rtc_set_date_alarm(RTC, 0, 0, 0, 0);
 			rtc_set_time_alarm(RTC, 0, 0, 0, 0, 1, 1);
-			TC_init(TC0, ID_TC0, 0, 20);
+			TC_init(TC0, ID_TC0, 0, 10);
 			
 			f_start = 1;
 			
@@ -977,8 +988,34 @@ int main(void)
 			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GRAY));
 			//ili9488_draw_filled_rectangle(10, 398+10, 70, 398+10+60);
 			ili9488_draw_pixmap(10,398+10,lockedRed.width,lockedRed.height,unlocked.data);
+
+			if (f_door_is_open && f_draw_start) {
+				f_draw_door_is_open = 1;
+			}
 			
 			f_draw_menu = 0;
+		}
+		
+		if (f_draw_anim) {
+			
+			tc_disable_interrupt(TC0, 0, TC_IER_CPCS);
+			tc_disable_interrupt(TC0, 1, TC_IER_CPCS);
+			rtc_disable_interrupt(RTC, RTC_IER_ALREN);
+			
+			ili9488_draw_pixmap(ILI9488_LCD_WIDTH/2-63,20,AnimaList[anim_counter]->width,AnimaList[anim_counter]->height,AnimaList[anim_counter]->data);
+			
+			tc_enable_interrupt(TC0, 0, TC_IER_CPCS);
+			tc_enable_interrupt(TC0, 1, TC_IER_CPCS);
+			rtc_enable_interrupt(RTC, RTC_IER_ALREN);
+			
+			anim_counter = anim_counter + 1;
+			
+			f_draw_anim = 0;
+		}
+		
+		if (f_draw_door_is_open) {
+			font_draw_text(&calibri_36, "PORTA ABERTA!", 20, 30, 1);
+			f_draw_door_is_open = 0;
 		}
 
 	}
